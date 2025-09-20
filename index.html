@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Top Game</title>
+  <style>
+    body { background: #10131a; color: #fff; text-align: center; margin: 0; }
+    canvas { background: #181c1f; display: block; margin: 30px auto 0 auto; border: 3px solid #fff; box-shadow: 0 0 40px #0af8; border-radius: 18px;}
+    #info { margin-top: 10px; font-size: 1.1em; }
+    #author { margin-top: 30px; color: #aaa; font-size: 1em; }
+    #menu, #gameover, #win, #shop {
+      position: fixed; left: 0; top: 0; width: 100vw; height: 100vh;
+      background: linear-gradient(120deg,rgba(0,0,0,0.92) 70%,rgba(0,40,80,0.92));
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; z-index: 10;
+      animation: fadein 0.7s;
+    }
+    #shop { display: none; }
+    @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+    #menu h1, #gameover h1, #win h1, #shop h1 { font-size: 2.7em; margin-bottom: 20px; letter-spacing: 2px; }
+    .btn {
+      padding: 15px 50px; margin: 12px; font-size: 1.3em; border: none; border-radius: 12px;
+      background: linear-gradient(90deg,#0af,#09f,#0af); color: #fff; cursor: pointer; transition: background 0.2s, transform 0.2s;
+      box-shadow: 0 0 16px #0af8;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    .btn:hover { background: #09c; transform: scale(1.09);}
+    #hud {
+      position: absolute; left: 0; top: 0; width: 100vw; pointer-events: none;
+      text-align: center; font-size: 1.25em; color: #fff; text-shadow: 0 0 8px #0af, 0 0 2px #000;
+      z-index: 2;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin-top: 10px;
+    }
+    #particles-canvas {
+      position: absolute; left: 0; top: 0; pointer-events: none; z-index: 1;
+    }
+    #music-btn {
+      position: fixed; right: 30px; top: 30px; z-index: 20; background: #0af; color: #fff; border: none; border-radius: 50%; width: 54px; height: 54px; font-size: 1.7em; box-shadow: 0 0 10px #0af8; cursor: pointer; transition: background 0.2s;
+    }
+    #music-btn:hover { background: #09c; }
+    #shop-list { margin: 0 0 20px 0; }
+    #shop-list li { margin: 8px 0; }
+    #money { font-weight: bold; color: #ff0; }
+    #inventory {
+      position: fixed;
+      right: 30px;
+      bottom: 30px;
+      z-index: 30;
+      background: rgba(20,30,40,0.95);
+      border-radius: 12px;
+      padding: 12px 18px 10px 18px;
+      min-width: 180px;
+      max-width: 260px;
+      box-shadow: 0 0 16px #0af8;
+      color: #fff;
+      font-size: 1em;
+      text-align: left;
+      pointer-events: auto;
+    }
+    #inventory h3 { margin: 0 0 8px 0; font-size: 1.1em; }
+    #inventory ul { margin: 0; padding: 0 0 0 16px; }
+    #inventory li { font-size: 0.98em; margin-bottom: 4px; }
+    #inventory button { margin-left: 4px; font-size: 0.92em; padding: 2px 8px; border-radius: 6px; border: none; background: #0af; color: #fff; cursor: pointer;}
+    #inventory button:hover { background: #09c; }
+    #inventory .empty { color: #888; font-size: 0.95em; }
+    #inventory .inv-limit { color: #ff0; font-size: 0.95em; margin-top: 4px; }
+    #leaderboard {
+      position: fixed;
+      left: 30px;
+      bottom: 30px;
+      z-index: 30;
+      background: rgba(20,30,40,0.95);
+      border-radius: 12px;
+      padding: 12px 18px 10px 18px;
+      min-width: 180px;
+      max-width: 260px;
+      box-shadow: 0 0 16px #0af8;
+      color: #fff;
+      font-size: 1em;
+      text-align: left;
+      pointer-events: auto;
+    }
+    #leaderboard h3 { margin: 0 0 8px 0; font-size: 1.1em; }
+    #leaderboard table { width: 100%; border-collapse: collapse; }
+    #leaderboard th, #leaderboard td { font-size: 0.98em; padding: 2px 6px; text-align: left; }
+    #leaderboard th { color: #0af; }
+    #leaderboard tr:nth-child(even) { background: rgba(0,0,0,0.08); }
+    #leaderboard .me { color: #ff0; font-weight: bold; }
+    @media (max-width: 900px) {
+      #inventory { position: static; margin: 0 auto 10px auto; display: inline-block; }
+      #leaderboard { position: static; margin: 0 auto 10px auto; display: inline-block; }
+    }
+    #lang-select {
+      position: fixed;
+      left: 30px;
+      top: 30px;
+      z-index: 40;
+      background: #222b;
+      color: #fff;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 1.1em;
+      border: none;
+      box-shadow: 0 0 10px #0af8;
+      cursor: pointer;
+    }
+    #lang-select:focus { outline: 2px solid #0af; }
+    </style>
+  <script>
+   
+    const orig_movePlayer = window.movePlayer;
+    window.movePlayer = function(dx, dy) {
+      orig_movePlayer(dx, dy);
+      if (typeof saveUserData === "function") saveUserData();
+    };
+    // 2. После покупок в магазине
+    const orig_openShop = window.openShop;
+    window.openShop = function() {
+      orig_openShop();
+      // Патчим кнопки покупки
+      setTimeout(() => {
+        document.querySelectorAll("#shop-list button.btn").forEach(btn => {
+          const orig = btn.onclick;
+          btn.onclick = function(e) {
+            orig.call(this, e);
+            if (typeof saveUserData === "function") saveUserData();
+          };
+        });
+      }, 0);
+    };
+    // 3. После использования предметов инвентаря
+    const orig_useInventoryItem = window.useInventoryItem;
+    window.useInventoryItem = function(idx) {
+      orig_useInventoryItem(idx);
+      if (typeof saveUserData === "function") saveUserData();
+    };
+    // 4. После изменений денег, апгрейдов, инвентаря
+    const orig_showInfo = window.showInfo;
+    window.showInfo = function(msg) {
+      orig_showInfo(msg);
+      if (typeof saveUserData === "function") saveUserData();
+    };
+  </script>
+  </head>
+  <body>
+    <div id="leaderboard">
+      <h3 id="leaderboard-title">Лидеры</h3>
+      <table>
+        <thead>
+          <tr><th>#</th><th id="lb-user">Игрок</th><th id="lb-score">Уровень</th></tr>
+        </thead>
+        <tbody id="leaderboard-body">
+        </tbody>
+      </table>
+    </div>
+    <select id="lang-select" title="Language">
+      <option value="ru">Русский</option>
+      <option value="pl">Polski</option>
+      <option value="en">English</option>
+    </select>
+    <script>
+    function updateLeaderboard() {
+      let users = [];
+      for (let k in localStorage) {
+        if (k.startsWith("user_")) {
+          try {
+            let data = JSON.parse(localStorage[k]);
+            users.push({
+              username: k.slice(5),
+              level: data.maxLevel !== undefined ? (data.maxLevel+1) : 1
+            });
+          } catch(e){}
+        }
+      }
+      users.sort((a,b) => b.level - a.level);
+      let tbody = document.getElementById("leaderboard-body");
+      tbody.innerHTML = "";
+      users.slice(0, 10).forEach((u, i) => {
+        let tr = document.createElement("tr");
+        if (window.currentUser && u.username === window.currentUser) tr.className = "me";
+        tr.innerHTML = `<td>${i+1}</td><td>${u.username}</td><td>${u.level}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    if (typeof updateLeaderboard === "function") updateLeaderboard();
+    const langData = {
+      ru: {
+        leaderboard: "Лидеры",
+        user: "Игрок",
+        score: "Уровень",
+        registration: "Регистрация / Вход",
+        username: "Имя пользователя",
+        password: "Пароль",
+        login: "Войти / Зарегистрироваться",
+        controls: "Управление: стрелки или WASD",
+        author: "Автор: Yevhenii Koval, класс 2TP_1",
+        start: "Старт",
+        exit: "Выход",
+        shop: "Магазин",
+        inventory: "Инвентарь",
+        empty: "Пусто",
+        slots: "Слотов",
+        continue: "Продолжить",
+        money: "Деньги",
+        gameover: "Конец игры",
+        win: "Победа!",
+        restart: "Заново",
+        menu: "Меню"
+      },
+      pl: {
+        leaderboard: "Tablica wyników",
+        user: "Gracz",
+        score: "Poziom",
+        registration: "Rejestracja / Logowanie",
+        username: "Nazwa użytkownika",
+        password: "Hasło",
+        login: "Zaloguj / Zarejestruj",
+        controls: "Sterowanie: strzałki lub WASD",
+        author: "Autor: Yevhenii Koval, klasa 2TP_1",
+        start: "Start",
+        exit: "Wyjście",
+        shop: "Sklep",
+        inventory: "Ekwipunek",
+        empty: "Pusto",
+        slots: "Sloty",
+        continue: "Kontynuuj",
+        money: "Pieniądze",
+        gameover: "Koniec gry",
+        win: "Wygrana!",
+        restart: "Restart",
+        menu: "Menu"
+      },
+      en: {
+        leaderboard: "Leaderboard",
+        user: "Player",
+        score: "Level",
+        registration: "Registration / Login",
+        username: "Username",
+        password: "Password",
+        login: "Login / Register",
+        controls: "Controls: Arrow keys or WASD",
+        author: "Author: Yevhenii Koval, class 2TP_1",
+        start: "Start",
+        exit: "Exit",
+        shop: "Shop",
+        inventory: "Inventory",
+        empty: "Empty",
+        slots: "Slots",
+        continue: "Continue",
+        money: "Money",
+        gameover: "Game Over",
+        win: "Victory!",
+        restart: "Restart",
+        menu: "Menu"
+      }
+    };
+    function setLang(lang) {
+      const t = langData[lang] || langData.ru;
+      document.getElementById("leaderboard-title").textContent = t.leaderboard;
+      document.getElementById("lb-user").textContent = t.user;
+      document.getElementById("lb-score").textContent = t.score;
+
+      let regModal = document.getElementById("register-modal");
+      if (regModal) {
+        regModal.querySelector("h2").textContent = t.registration;
+        document.getElementById("reg-username").placeholder = t.username;
+        document.getElementById("reg-password").placeholder = t.password;
+        document.getElementById("reg-btn").textContent = t.login;
+      }
+
+      let menu = document.getElementById("menu");
+      if (menu) {
+        menu.querySelector("h1").textContent = "Top Game";
+        let btns = menu.querySelectorAll(".btn");
+        if (btns[0]) btns[0].textContent = t.start;
+        if (btns[1]) btns[1].textContent = t.exit;
+        let controlsDiv = menu.querySelector("div[style*='Controls']");
+        if (controlsDiv) controlsDiv.innerHTML = t.controls + "<br>" + t.author;
+      }
+
+      let shop = document.getElementById("shop");
+      if (shop) {
+        shop.querySelector("h1").textContent = t.shop;
+        document.getElementById("money").textContent = t.money + ": 0";
+        let btns = shop.querySelectorAll(".btn");
+        if (btns[0]) btns[0].textContent = t.continue;
+      }
+
+      let inv = document.getElementById("inventory");
+      if (inv) {
+        inv.querySelector("h3").textContent = t.inventory;
+        let ul = document.getElementById("inv-list");
+        if (ul && ul.children.length === 1 && ul.children[0].className === "empty") {
+          ul.children[0].textContent = t.empty;
+        }
+        document.getElementById("inv-limit").textContent = t.slots + ": 0/25";
+      }
+
+      let go = document.getElementById("gameover");
+      if (go) {
+        go.querySelector("h1").textContent = t.gameover;
+        let btns = go.querySelectorAll(".btn");
+        if (btns[0]) btns[0].textContent = t.restart;
+        if (btns[1]) btns[1].textContent = t.menu;
+      }
+      let win = document.getElementById("win");
+      if (win) {
+        win.querySelector("h1").textContent = t.win;
+        let btns = win.querySelectorAll(".btn");
+        if (btns[0]) btns[0].textContent = t.restart;
+        if (btns[1]) btns[1].textContent = t.menu;
+      }
+
+      let author = document.getElementById("author");
+      if (author) author.textContent = t.author;
+    }
+
+    let lang = localStorage.getItem("lang") || "ru";
+    document.getElementById("lang-select").value = lang;
+    setLang(lang);
+    document.getElementById("lang-select").onchange = function() {
+      lang = this.value;
+      localStorage.setItem("lang", lang);
+      setLang(lang);
+    };
+  </script>
+</head>
+<body>
+  <button id="music-btn" title="Toggle music">🎵</button>
+  <div id="menu">
+    <h1>Top Game</h1>
+    <button class="btn" id="startBtn">Start</button>
+    <button class="btn" id="exitBtn">Exit</button>
+    <div style="margin-top:30px; font-size:1.1em; color:#aaa;">
+      Controls: Arrow keys or WASD<br>
+      Author: Yevhenii Koval, class 2TP_1
+    </div>
+  </div>
+  <div id="gameover" style="display:none;">
+    <h1>Game Over</h1>
+    <div id="gameover-msg"></div>
+    <button class="btn" onclick="restartGame()">Restart</button>
+    <button class="btn" onclick="showMenu()">Menu</button>
+  </div>
+  <div id="win" style="display:none;">
+    <h1>Victory!</h1>
+    <div>You completed all 100 levels!</div>
+    <button class="btn" onclick="restartGame()">Restart</button>
+    <button class="btn" onclick="showMenu()">Menu</button>
+  </div>
+  <div id="shop">
+    <h1>Shop</h1>
+    <div id="money">Money: 0</div>
+    <ul id="shop-list"></ul>
+    <button class="btn" onclick="closeShop()">Continue</button>
+  </div>
+  <div id="inventory">
+    <h3>Inventory</h3>
+    <ul id="inv-list"></ul>
+    <div class="inv-limit" id="inv-limit"></div>
+  </div>
+  <canvas id="game" width="480" height="320"></canvas>
+  <canvas id="particles-canvas" width="480" height="320"></canvas>
+  <div id="hud"></div>
+  <div id="info"></div>
+  <div id="author">Author: Yevhenii Koval, class 2TP_1</div>
+
+  <div id="register-modal" style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.92); z-index:100; align-items:center; justify-content:center; flex-direction:column;">
+    <div style="background:#222b; padding:32px 36px 24px 36px; border-radius:16px; box-shadow:0 0 24px #0af8; min-width:320px; max-width:90vw;">
+      <h2 style="margin-top:0; color:#0af;">Регистрация / Вход</h2>
+      <div style="margin-bottom:10px;">
+        <input id="reg-username" type="text" placeholder="Имя пользователя" style="font-size:1.1em; padding:8px; border-radius:8px; border:none; width:90%; margin-bottom:8px;"><br>
+        <input id="reg-password" type="password" placeholder="Пароль" style="font-size:1.1em; padding:8px; border-radius:8px; border:none; width:90%;">
+      </div>
+      <div id="reg-error" style="color:#f33; min-height:22px; margin-bottom:8px;"></div>
+      <button id="reg-btn" class="btn" style="width:100%;">Войти / Зарегистрироваться</button>
+    </div>
+  </div>
+  <audio id="bg-music" src="https://cdn.pixabay.com/audio/2022/10/16/audio_12b7b8b6e7.mp3" loop></audio>
+  <audio id="snd-trap" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfae4e2.mp3"></audio>
+  <audio id="snd-enemy" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfae4e2.mp3"></audio>
+  <audio id="snd-win" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfae4e2.mp3"></audio>
+  <script>
+
+    function randomLevel(n) {
+      let arr = [];
+      for (let y = 0; y < 5; y++) {
+        let row = "";
+        for (let x = 0; x < 5; x++) {
+          if (x === 0 && y === 0) row += "P";
+          else if (x === 4 && y === 4) row += "X";
+          else {
+            let r = Math.random();
+            if (r < 0.08 + n*0.001) row += "E";
+            else if (r < 0.15 + n*0.001) row += "T";
+            else row += ".";
+          }
+        }
+        arr.push(row);
+      }
+      return arr;
+    }
+    const levels = [];
+    for (let i = 0; i < 100; i++) levels.push(randomLevel(i));
+
+    const tileSize = 60;
+    let levelNum, map, player, enemies, traps, exit, hp, gameOver, win, animFrame, animCounter = 0, particles = [];
+    let musicOn = false;
+    let money = 0;
+    let upgrades = { maxHp: 0, shield: 0, revive: 0 };
+
+
+    const inventory = [];
+    const INVENTORY_LIMIT = 25;
+    const bonusItems = [
+      {
+        name: "Shield",
+        desc: "Дает 1 щит (спасает от урона)",
+        use: () => { upgrades.shield++; showInfo("Использовано: Щит (+1)"); }
+      },
+      {
+        name: "Heart",
+        desc: "Восстанавливает 1 HP",
+        use: () => { hp = Math.min(hp + 1, 3 + upgrades.maxHp); showInfo("Использовано: +1 HP"); }
+      },
+      {
+        name: "Regen",
+        desc: "Восстанавливает все HP",
+        use: () => { hp = 3 + upgrades.maxHp; showInfo("Использовано: Полное восстановление HP"); }
+      },
+      {
+        name: "Revive",
+        desc: "Дает 1 воскрешение",
+        use: () => { upgrades.revive++; showInfo("Использовано: Воскрешение (+1)"); }
+      }
+    ];
+    function addRandomBonusToInventory() {
+      if (inventory.length >= INVENTORY_LIMIT) return;
+      if (Math.random() < 0.25) {
+        const item = bonusItems[Math.floor(Math.random() * bonusItems.length)];
+        inventory.push({ ...item });
+        showInfo("Получен бонус: " + item.name);
+        updateInventory();
+      }
+    }
+    function useInventoryItem(idx) {
+      if (inventory[idx]) {
+        inventory[idx].use();
+        inventory.splice(idx, 1);
+        updateInventory();
+        draw();
+      }
+    }
+    function updateInventory() {
+      const ul = document.getElementById("inv-list");
+      ul.innerHTML = "";
+      if (inventory.length === 0) {
+        const li = document.createElement("li");
+        li.className = "empty";
+        li.textContent = "Пусто";
+        ul.appendChild(li);
+      } else {
+        inventory.forEach((item, i) => {
+          const li = document.createElement("li");
+          li.innerHTML = `<b>${item.name}</b> <span style="color:#aaa;">${item.desc}</span>`;
+          const btn = document.createElement("button");
+          btn.textContent = "Исп.";
+          btn.onclick = () => useInventoryItem(i);
+          li.appendChild(btn);
+          ul.appendChild(li);
+        });
+      }
+      document.getElementById("inv-limit").textContent = `Слотов: ${inventory.length}/${INVENTORY_LIMIT}`;
+    }
+
+    // Магазин прокачек
+    const shopItems = [
+      { name: "Max HP +1", cost: 30, action: () => { upgrades.maxHp++; } },
+      { name: "Shield (1 hit)", cost: 40, action: () => { upgrades.shield++; } },
+      { name: "Revive (1 time)", cost: 60, action: () => { upgrades.revive++; } }
+    ];
+
+    // Музыка и звуки
+    const bgMusic = document.getElementById("bg-music");
+    const sndTrap = document.getElementById("snd-trap");
+    const sndEnemy = document.getElementById("snd-enemy");
+    const sndWin = document.getElementById("snd-win");
+    document.getElementById("music-btn").onclick = () => {
+      musicOn = !musicOn;
+      if (musicOn) {
+        bgMusic.volume = 0.5;
+        bgMusic.play();
+        document.getElementById("music-btn").style.background = "#0f8";
+      } else {
+        bgMusic.pause();
+        document.getElementById("music-btn").style.background = "#0af";
+      }
+    };
+
+    // Загрузка уровня
+    function loadLevel(num) {
+      map = levels[num].map(row => row.split(""));
+      player = { x: 0, y: 0, anim: 0 };
+      enemies = [];
+      traps = [];
+      exit = null;
+      hp = 3 + upgrades.maxHp;
+      gameOver = false;
+      win = false;
+      particles = [];
+      for (let y = 0; y < map.length; y++) {
+        for (let x = 0; x < map[y].length; x++) {
+          if (map[y][x] === "P") { player = { x, y, anim: 0 }; }
+          if (map[y][x] === "E") { enemies.push({ x, y, anim: 0, dir: Math.random() < 0.5 ? 1 : -1 }); }
+          if (map[y][x] === "T") { traps.push({ x, y, anim: 0 }); }
+          if (map[y][x] === "X") { exit = { x, y }; }
+        }
+      }
+      updateInventory();
+    }
+
+    function drawTile(x, y) {
+      ctx.save();
+      let grad = ctx.createLinearGradient(x*tileSize, y*tileSize, x*tileSize+tileSize, y*tileSize+tileSize);
+      grad.addColorStop(0, "#23283a");
+      grad.addColorStop(1, "#2a2e38");
+      ctx.fillStyle = grad;
+      ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+      ctx.strokeStyle = "rgba(0,200,255,0.18)";
+      ctx.lineWidth = 2;
+      ctx.shadowColor = "#0af";
+      ctx.shadowBlur = 8;
+      ctx.strokeRect(x * tileSize, y * tileSize, tileSize, tileSize);
+      ctx.restore();
+    }
+
+    function drawPlayer() {
+      ctx.save();
+      ctx.translate(player.x * tileSize + tileSize/2, player.y * tileSize + tileSize/2);
+      ctx.rotate(Math.sin(animCounter/10)/10);
+      ctx.save();
+      ctx.globalAlpha = 0.25;
+      ctx.scale(1.2,0.5);
+      ctx.beginPath();
+      ctx.arc(0, 38, 18, 0, Math.PI*2);
+      ctx.fillStyle = "#000";
+      ctx.fill();
+      ctx.restore();
+      let aura = ctx.createRadialGradient(0,0,10,0,0,32);
+      aura.addColorStop(0, "#fff");
+      aura.addColorStop(0.5, "#3af");
+      aura.addColorStop(1, "rgba(0,255,255,0)");
+      ctx.globalAlpha = 0.7 + 0.2*Math.sin(animCounter/7);
+      ctx.beginPath();
+      ctx.arc(0, 0, 32, 0, Math.PI*2);
+      ctx.fillStyle = aura;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      let grad = ctx.createRadialGradient(0,0,10,0,0,28);
+      grad.addColorStop(0, "#fff");
+      grad.addColorStop(0.4, "#3af");
+      grad.addColorStop(1, "#0af");
+      ctx.fillStyle = grad;
+      ctx.shadowColor = "#0ff";
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.arc(0, 0, tileSize/2.5, 0, Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.ellipse(-10, -8, 6, 8, 0, 0, Math.PI*2);
+      ctx.ellipse(10, -8, 6, 8, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = "#222";
+      ctx.beginPath();
+      ctx.arc(-10, -8, 2.5, 0, Math.PI*2);
+      ctx.arc(10, -8, 2.5, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 8, 10, 0.2, Math.PI-0.2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawEnemy(e) {
+      ctx.save();
+      ctx.translate(e.x * tileSize + tileSize/2, e.y * tileSize + tileSize/2);
+      ctx.rotate(Math.sin(animCounter/8 + e.x) / 8);
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      ctx.scale(1.1,0.5);
+      ctx.beginPath();
+      ctx.arc(0, 28, 14, 0, Math.PI*2);
+      ctx.fillStyle = "#000";
+      ctx.fill();
+      ctx.restore();
+      let grad = ctx.createRadialGradient(0,0,8,0,0,24);
+      grad.addColorStop(0, "#fff");
+      grad.addColorStop(0.3, "#f33");
+      grad.addColorStop(1, "#900");
+      ctx.fillStyle = grad;
+      ctx.shadowColor = "#f33";
+      ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.arc(0, 0, tileSize/2.7, 0, Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.ellipse(-7, -7, 4, 6, 0, 0, Math.PI*2);
+      ctx.ellipse(7, -7, 4, 6, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = "#222";
+      ctx.beginPath();
+      ctx.arc(-7, -7, 1.7, 0, Math.PI*2);
+      ctx.arc(7, -7, 1.7, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 8, 8, Math.PI*0.1, Math.PI-0.1);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawTrap(t) {
+      ctx.save();
+      ctx.translate(t.x * tileSize + tileSize/2, t.y * tileSize + tileSize/2);
+      ctx.rotate(animCounter/10);
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        let angle = i * Math.PI * 2 / 8;
+        let len = i % 2 === 0 ? tileSize/3 : tileSize/5;
+        ctx.lineTo(Math.cos(angle)*len, Math.sin(angle)*len);
+      }
+      ctx.closePath();
+      let grad = ctx.createRadialGradient(0,0,5,0,0,22);
+      grad.addColorStop(0, "#fff");
+      grad.addColorStop(0.5, "#ff0");
+      grad.addColorStop(1, "#fa0");
+      ctx.fillStyle = grad;
+      ctx.shadowColor = "#ff0";
+      ctx.shadowBlur = 14;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawExit() {
+      ctx.save();
+      ctx.globalAlpha = 0.8 + 0.2*Math.sin(animCounter/7);
+      let grad = ctx.createRadialGradient(
+        exit.x * tileSize + tileSize/2, exit.y * tileSize + tileSize/2, 5,
+        exit.x * tileSize + tileSize/2, exit.y * tileSize + tileSize/2, 24
+      );
+      grad.addColorStop(0, "#fff");
+      grad.addColorStop(0.4, "#0f0");
+      grad.addColorStop(1, "#080");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(exit.x * tileSize + tileSize/2, exit.y * tileSize + tileSize/2, tileSize/2.5, 0, Math.PI*2);
+      ctx.fill();
+      ctx.font = "bold 28px sans-serif";
+      ctx.fillStyle = "#fff";
+      ctx.textAlign = "center";
+      ctx.fillText("🏁", exit.x * tileSize + tileSize/2, exit.y * tileSize + tileSize/1.5);
+      ctx.restore();
+    }
+
+    function spawnParticles(x, y, color) {
+      for (let i = 0; i < 18; i++) {
+        let angle = Math.random() * Math.PI * 2;
+        let speed = 2 + Math.random() * 2;
+        particles.push({
+          x: x * tileSize + tileSize/2,
+          y: y * tileSize + tileSize/2,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 18 + Math.random()*8,
+          color
+        });
+      }
+    }
+
+    // Фоновые частицы
+    const bgParticles = [];
+    function spawnBgParticles() {
+      for (let i = 0; i < 8; i++) {
+        bgParticles.push({
+          x: Math.random()*canvas.width,
+          y: Math.random()*canvas.height,
+          r: 1+Math.random()*2,
+          alpha: 0.15+Math.random()*0.15,
+          speed: 0.2+Math.random()*0.3
+        });
+      }
+    }
+    function drawBgParticles() {
+      pctx.clearRect(0,0,canvas.width,canvas.height);
+      for (let p of bgParticles) {
+        pctx.save();
+        pctx.globalAlpha = p.alpha;
+        pctx.beginPath();
+        pctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+        pctx.fillStyle = "#0af";
+        pctx.shadowColor = "#0af";
+        pctx.shadowBlur = 8;
+        pctx.fill();
+        pctx.restore();
+        p.x += p.speed;
+        if (p.x > canvas.width+10) {
+          p.x = -10; p.y = Math.random()*canvas.height;
+        }
+      }
+    }
+
+    function drawParticles() {
+      for (let i = particles.length-1; i >= 0; i--) {
+        let p = particles[i];
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.life/25);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.restore();
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.93;
+        p.vy *= 0.93;
+        p.life--;
+        if (p.life < 0) particles.splice(i,1);
+      }
+    }
+
+    // Главная отрисовка
+    function draw() {
+      drawBgParticles();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < map.length; y++) {
+        for (let x = 0; x < map[y].length; x++) {
+          drawTile(x, y);
+        }
+      }
+      traps.forEach(drawTrap);
+      enemies.forEach(drawEnemy);
+      drawExit();
+      drawPlayer();
+      drawParticles();
+    }
+
+    // Движение игрока
+    function movePlayer(dx, dy) {
+      if (gameOver || win) return;
+      const nx = player.x + dx, ny = player.y + dy;
+      if (nx < 0 || ny < 0 || nx >= map[0].length || ny >= map.length) return;
+      player.x = nx; player.y = ny;
+      let trap = traps.find(t => t.x === nx && t.y === ny);
+      if (trap) {
+        if (upgrades.shield > 0) {
+          upgrades.shield--;
+          showInfo("Shield saved you!");
+        } else {
+          hp--;
+          showInfo("Ouch! Trap! -1 HP");
+        }
+        traps = traps.filter(t => !(t.x === nx && t.y === ny));
+        spawnParticles(nx, ny, "#ff0");
+        sndTrap.currentTime = 0; sndTrap.play();
+        if (hp <= 0) { tryReviveOrEnd("Вы подорвались на ловушке!"); }
+      }
+      let enemy = enemies.find(e => e.x === nx && e.y === ny);
+      if (enemy) {
+        if (upgrades.shield > 0) {
+          upgrades.shield--;
+          showInfo("Shield saved you!");
+        } else {
+          hp--;
+          showInfo("Enemy attacks! -1 HP");
+        }
+        enemies = enemies.filter(e => !(e.x === nx && e.y === ny));
+        spawnParticles(nx, ny, "#f33");
+        sndEnemy.currentTime = 0; sndEnemy.play();
+        if (hp <= 0) { tryReviveOrEnd("Вас победил враг!"); }
+      }
+      if (exit.x === nx && exit.y === ny) {
+        let reward = 10 + levelNum * 2;
+        money += reward;
+        showInfo(`Level completed! +$${reward}`);
+        spawnParticles(nx, ny, "#0f0");
+        sndWin.currentTime = 0; sndWin.play();
+        addRandomBonusToInventory();
+        if ((levelNum+1) % 5 === 0) {
+          openShop();
+          return;
+        }
+        if (levelNum < levels.length - 1) {
+          levelNum++;
+          loadLevel(levelNum);
+        } else {
+          win = true;
+          document.getElementById("win").style.display = "flex";
+        }
+      }
+    }
+
+    // Воскрешение или конец игры
+    function tryReviveOrEnd(msg) {
+      if (upgrades.revive > 0) {
+        upgrades.revive--;
+        hp = 3 + upgrades.maxHp;
+        showInfo("Воскрешение! Жизни восстановлены.");
+      } else {
+        endGame(false, msg);
+      }
+    }
+
+    // Информация для игрока
+    function showInfo(msg) {
+      document.getElementById("info").textContent = `HP: ${hp} | Level: ${levelNum+1}/100 | $${money} ${msg ? "| " + msg : ""}`;
+      document.getElementById("hud").textContent = `HP: ${hp}   |   Level: ${levelNum+1}/100   |   $${money}`;
+      document.getElementById("money") && (document.getElementById("money").textContent = "Money: $" + money);
+    }
+
+    // Конец игры
+    function endGame(isWin, msg) {
+      gameOver = true;
+      document.getElementById("gameover").style.display = "flex";
+      document.getElementById("gameover-msg").textContent = msg;
+      bgMusic.pause();
+      musicOn = false;
+      document.getElementById("music-btn").style.background = "#0af";
+    }
+
+    // Управление
+    window.addEventListener("keydown", e => {
+      if (document.getElementById("menu").style.display !== "none" || document.getElementById("shop").style.display !== "none") return;
+      if (gameOver || win) return;
+      if (e.key === "ArrowUp" || e.key === "w") movePlayer(0, -1);
+      if (e.key === "ArrowDown" || e.key === "s") movePlayer(0, 1);
+      if (e.key === "ArrowLeft" || e.key === "a") movePlayer(-1, 0);
+      if (e.key === "ArrowRight" || e.key === "d") movePlayer(1, 0);
+      draw();
+      showInfo();
+    });
+
+    // Магазин
+    function openShop() {
+      document.getElementById("shop").style.display = "flex";
+      let ul = document.getElementById("shop-list");
+      ul.innerHTML = "";
+      shopItems.forEach((item, idx) => {
+        let li = document.createElement("li");
+        li.innerHTML = `<b>${item.name}</b> <span style="color:#ff0;">$${item.cost}</span> `;
+        let btn = document.createElement("button");
+        btn.textContent = "Buy";
+        btn.className = "btn";
+        btn.style.fontSize = "0.9em";
+        btn.onclick = () => {
+          if (money >= item.cost) {
+            money -= item.cost;
+            item.action();
+            showInfo("Куплено: " + item.name);
+            openShop();
+          } else {
+            showInfo("Недостаточно денег!");
+          }
+        };
+        li.appendChild(btn);
+        ul.appendChild(li);
+      });
+      showInfo();
+    }
+    function closeShop() {
+      document.getElementById("shop").style.display = "none";
+      if (levelNum < levels.length - 1) {
+        levelNum++;
+        loadLevel(levelNum);
+        showInfo("Level completed!");
+      } else {
+        win = true;
+        document.getElementById("win").style.display = "flex";
+      }
+    }
+
+    // Меню и рестарт
+    function startGame() {
+      document.getElementById("menu").style.display = "none";
+      document.getElementById("gameover").style.display = "none";
+      document.getElementById("win").style.display = "none";
+      document.getElementById("shop").style.display = "none";
+      levelNum = 0;
+      money = 0;
+      upgrades = { maxHp: 0, shield: 0, revive: 0 };
+      inventory.length = 0;
+      loadLevel(levelNum);
+      draw();
+      showInfo("Use arrow keys or WASD to move");
+      animCounter = 0;
+      if (musicOn) { bgMusic.currentTime = 0; bgMusic.play(); }
+      loop();
+    }
+    function restartGame() {
+      startGame();
+    }
+    function showMenu() {
+      document.getElementById("menu").style.display = "flex";
+      document.getElementById("gameover").style.display = "none";
+      document.getElementById("win").style.display = "none";
+      document.getElementById("shop").style.display = "none";
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      pctx.clearRect(0, 0, canvas.width, canvas.height);
+      document.getElementById("info").textContent = "";
+      document.getElementById("hud").textContent = "";
+      cancelAnimationFrame(animFrame);
+      bgMusic.pause();
+      musicOn = false;
+      document.getElementById("music-btn").style.background = "#0af";
+    }
+    document.getElementById("startBtn").onclick = startGame;
+    document.getElementById("exitBtn").onclick = () => { 
+      showMenu();
+    };
+    function moveEnemies() {
+      for (let e of enemies) {
+        if (Math.random() < 0.5) continue;
+        let nx = e.x + e.dir;
+        if (nx < 0 || nx >= map[0].length || map[e.y][nx] === "T" || map[e.y][nx] === "X") {
+          e.dir *= -1;
+          nx = e.x + e.dir;
+        }
+        if (traps.some(t => t.x === nx && t.y === e.y) || (exit.x === nx && exit.y === e.y)) continue;
+        if (enemies.some(other => other !== e && other.x === nx && other.y === e.y)) continue;
+        e.x = nx;
+        if (e.x === player.x && e.y === player.y) {
+          if (upgrades.shield > 0) {
+            upgrades.shield--;
+            showInfo("Shield saved you!");
+          } else {
+            hp--;
+            showInfo("Enemy attacks! -1 HP");
+          }
+          spawnParticles(e.x, e.y, "#f33");
+          sndEnemy.currentTime = 0; sndEnemy.play();
+          if (hp <= 0) { tryReviveOrEnd("Вас поймал враг!"); }
+        }
+      }
+    }
+
+    // Анимация
+    function loop() {
+      animCounter++;
+      if (!gameOver && !win && animCounter % 30 === 0) moveEnemies();
+      draw();
+      animFrame = requestAnimationFrame(loop);
+    }
+
+    // Старт
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const pcanvas = document.getElementById("particles-canvas");
+    const pctx = pcanvas.getContext("2d");
+    window.addEventListener("resize", () => {
+      let w = Math.min(window.innerWidth-40, 480);
+      let h = Math.min(window.innerHeight-120, 320);
+      canvas.width = pcanvas.width = w;
+      canvas.height = pcanvas.height = h;
+    });
+    window.dispatchEvent(new Event("resize"));
+    spawnBgParticles();
+    showMenu();
+        // --- Защита от взлома (простая проверка целостности) ---
+    (function(){
+      const hash = "d1f3b7e9c2a4";
+      Object.defineProperty(window, "_gameHash", { value: hash, writable: false });
+      setInterval(() => {
+        if (window._gameHash !== hash) location.reload();
+      }, 2000);
+    })();
+
+    // --- Регистрация и авторизация ---
+    let currentUser = null;
+    function validatePassword(password) {
+      // Google-like: 8+, буквы, цифры, спецсимвол, верхний и нижний регистр
+      return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/.test(password);
+    }
+    function validateUsername(username) {
+      // Только буквы/цифры, 3-16 символов, уникальность
+      if (!/^[a-zA-Z0-9_]{3,16}$/.test(username)) return false;
+      return !localStorage.getItem("acc_" + username);
+    }
+    function hashPassword(pw) {
+      // Простая хеш-функция (для реальной защиты нужен сервер!)
+      let h = 0;
+      for (let i = 0; i < pw.length; i++) h = (h*31 + pw.charCodeAt(i)) & 0xffffffff;
+      return h.toString(16);
+    }
+    function showRegisterModal() {
+      document.getElementById("register-modal").style.display = "flex";
+    }
+    function hideRegisterModal() {
+      document.getElementById("register-modal").style.display = "none";
+    }
+    document.getElementById("reg-btn").onclick = function() {
+      const username = document.getElementById("reg-username").value.trim();
+      const password = document.getElementById("reg-password").value;
+      const errorDiv = document.getElementById("reg-error");
+      if (!username || !password) {
+        errorDiv.textContent = "Введите имя и пароль";
+        return;
+      }
+      if (!/^[a-zA-Z0-9_]{3,16}$/.test(username)) {
+        errorDiv.textContent = "Имя: 3-16 символов, только буквы/цифры/нижнее подчеркивание";
+        return;
+      }
+      if (!validatePassword(password)) {
+        errorDiv.textContent = "Пароль: 8+ символов, буквы, цифры, спецсимвол, верхний и нижний регистр";
+        return;
+      }
+      const userKey = "acc_" + username;
+      const passHash = hashPassword(password);
+      let stored = localStorage.getItem(userKey);
+      if (!stored) {
+        // Регистрация
+        if (!validateUsername(username)) {
+          errorDiv.textContent = "Имя занято";
+          return;
+        }
+        localStorage.setItem(userKey, passHash);
+        currentUser = username;
+        hideRegisterModal();
+        startGame();
+      } else if (stored === passHash) {
+        // Вход
+        currentUser = username;
+        hideRegisterModal();
+        loadUserData();
+        startGame();
+      } else {
+        errorDiv.textContent = "Неверный пароль";
+      }
+    };
+
+    // --- Сохранение и загрузка аккаунта ---
+    function saveUserData() {
+      if (!currentUser) return;
+      const data = {
+        money, upgrades, inventory, maxLevel: levelNum, date: Date.now()
+      };
+      localStorage.setItem("user_" + currentUser, JSON.stringify(data));
+      updateLeaderboard();
+    }
+    function loadUserData() {
+      if (!currentUser) return;
+      const data = JSON.parse(localStorage.getItem("user_" + currentUser));
+      if (data) {
+        money = data.money || 0;
+        upgrades = data.upgrades || { maxHp: 0, shield: 0, revive: 0 };
+        inventory.length = 0;
+        if (Array.isArray(data.inventory)) data.inventory.forEach(i => inventory.push(i));
+        levelNum = data.maxLevel || 0;
+        updateInventory();
+        showInfo();
+        // --- ЛИДЕРЫ ---
+        updateLeaderboard();
+      }
+    }
+    // --- Показывать окно регистрации при запуске ---
+    window.onload = function() {
+      showRegisterModal();
+    };
+  </script>
+</body>
+</html>
